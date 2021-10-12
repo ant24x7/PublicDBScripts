@@ -1,0 +1,21 @@
+Invoke-DbaQuery -SqlInstance <ServerName> -Database master -Query"
+SELECT pr.name, pr.type_desc, pe.state_desc, pe.permission_name, ISNULL(OBJECT_NAME(pe.major_id),DB_NAME()) AS [ObjectName],
+CASE
+--For Database level permissions
+WHEN (pe.state = 'G' AND pe.major_id = 0) THEN 'USE ['+DB_NAME()+']; GRANT '+pe.permission_name COLLATE SQL_Latin1_General_CP1_CS_AS+ ' TO ['+pr.name COLLATE SQL_Latin1_General_CP1_CS_AS+']'
+-- For user objects and permissions
+WHEN (pe.state = 'G' AND pe.major_id > 1) THEN 'USE ['+DB_NAME()+']; GRANT '+pe.permission_name COLLATE SQL_Latin1_General_CP1_CS_AS+ 'ON ['+OBJECT_NAME(pe.major_id)+'] TO ['+pr.name COLLATE SQL_Latin1_General_CP1_CS_AS+']'
+-- For xp_cmdshell
+WHEN (pe.state = 'G' AND pe.major_id = -1008137134) THEN 'USE ['+DB_NAME()+']; GRANT '+pe.permission_name COLLATE SQL_Latin1_General_CP1_CS_AS+ 'ON ['+OBJECT_NAME(pe.major_id)+'] TO ['+pr.name COLLATE SQL_Latin1_General_CP1_CS_AS+']'
+--Rest condition needs to be added as per requirements
+ELSE 'Please review object and generate script manually'
+END AS [Script]
+FROM sys.database_principals AS pr
+INNER JOIN sys.database_permissions AS pe
+ON pe.grantee_principal_id = pr.principal_id
+WHERE 
+pe.permission_name NOT IN (
+'CONNECT SQL','CONNECT')
+AND type_desc <> 'DATABASE_ROLE'
+AND name NOT IN ('ExcludedUsers')
+"|Export-Csv -NoTypeInformation -Path '<ExportPath>'
